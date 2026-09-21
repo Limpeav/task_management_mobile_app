@@ -41,6 +41,21 @@ post_install do |installer|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+
+      # Fix: 'openssl/ssl.h' file not found in gRPC-C++ on Apple Silicon / Xcode 15+
+      # Inject BoringSSL headers shipped inside the gRPC-C++ pod itself
+      if target.name == 'gRPC-C++'
+        config.build_settings['HEADER_SEARCH_PATHS'] ||= '$(inherited)'
+        config.build_settings['HEADER_SEARCH_PATHS'] += ' $(PODS_ROOT)/gRPC-C++/src/core/tsi/ssl/ssl_transport_security_utils $(PODS_ROOT)/BoringSSL-GRPC/src/include $(PODS_ROOT)/BoringSSL-GRPC/src'
+      end
+
+      # Broader fix for all pods that reference openssl headers via gRPC/BoringSSL
+      if ['gRPC-C++', 'gRPC-Core', 'FirebaseFirestore'].include?(target.name)
+        config.build_settings['HEADER_SEARCH_PATHS'] ||= '$(inherited)'
+        config.build_settings['HEADER_SEARCH_PATHS'] += ' $(PODS_ROOT)/BoringSSL-GRPC/src/include'
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'GRPC_ARES=0'
+      end
     end
   end
 end
